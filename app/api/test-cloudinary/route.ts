@@ -3,40 +3,33 @@ import { v2 as cloudinary } from 'cloudinary';
 
 export async function GET() {
   try {
-    // Get values from environment
+    // Check what Vercel sees
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
     const apiKey = process.env.CLOUDINARY_API_KEY;
     const apiSecret = process.env.CLOUDINARY_API_SECRET;
     
-    console.log('Environment check:', {
-      cloudName: cloudName,
+    console.log('Cloudinary check:', {
+      cloudName,
       apiKeyExists: !!apiKey,
       apiSecretExists: !!apiSecret,
     });
     
-    // Configure Cloudinary
+    // Configure
     cloudinary.config({
       cloud_name: cloudName,
       api_key: apiKey,
       api_secret: apiSecret,
     });
     
-    // Test the configuration
-    const config = cloudinary.config();
-    
-    // Test connection with a ping
+    // Test connection
     const result = await cloudinary.api.ping();
     
     return NextResponse.json({
       success: true,
-      message: 'Cloudinary is working!',
-      cloud_name: config.cloud_name,
-      api_key_exists: !!config.api_key,
-      api_secret_exists: !!config.api_secret,
+      cloud_name: cloudinary.config().cloud_name,
       ping: result,
     });
   } catch (error) {
-    console.error('Cloudinary test error:', error);
     return NextResponse.json({
       success: false,
       error: (error as Error).message,
