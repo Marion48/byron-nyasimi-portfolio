@@ -1,0 +1,93 @@
+import { createClient } from '@supabase/supabase-js'
+import { NextResponse } from 'next/server'
+import { Resend } from 'resend'
+
+// Initialize Resend
+const resend = new Resend(process.env.RESEND_API_KEY)
+
+// Initialize Supabase admin client
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY! // You'll need to add this to .env.local
+)
+
+export async function POST(request: Request) {
+  try {
+    const { name, email, message } = await request.json()
+
+    // Validate input
+    if (!name || !email || !message) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      )
+    }
+
+    // 1. Save to Supabase
+    const { data: savedMessage, error: dbError } = await supabaseAdmin
+      .from('contact_messages')
+      .insert([
+        {
+          name,
+          email,
+          message,
+          status: 'unread'
+        }
+      ])
+      .select()
+      .single()
+
+    if (dbError) {
+      console.error('Database error:', dbError)
+      return NextResponse.json(
+        { error: 'Failed to save message' },
+        { status: 500 }
+      )
+    }
+
+    // 2. Send email notification
+    try {
+      await resend.emails.send({
+        from: 'Byron Nyasimi Studio <onboarding@resend.dev>', // Update this with your domain
+        to: ['studio@byronnyasimi.com'], // Send to artist's email
+        subject: `New Contact Form Message from ${name}`,
+        html: `
+          <div style="font-family: Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="font-weight: 300; letter-spacing: 2px; text-transform: uppercase; color: #333;">
+              New Contact Form Submission
+            </h2>
+            
+            <div style="margin: 30px 0; padding: 20px 0; border-top: 1px solid #eee; border-bottom: 1px solid #eee;">
+              <p style="margin: 10px 0;"><strong style="text-transform: uppercase; letter-spacing: 1px; color: #666; font-size: 12px;">Name:</strong></p>
+              <p style="margin: 5px 0 20px 0; color: #333;">${name}</p>
+              
+              <p style="margin: 10px 0;"><strong style="text-transform: uppercase; letter-spacing: 1px; color: #666; font-size: 12px;">Email:</strong></p>
+              <p style="margin: 5px 0 20px 0; color: #333;">${email}</p>
+              
+              <p style="margin: 10px 0;"><strong style="text-transform: uppercase; letter-spacing: 1px; color: #666; font-size: 12px;">Message:</strong></p>
+              <p style="margin: 5px 0 20px 0; color: #333; line-height: 1.6;">${message}</p>
+            </div>
+            
+            <p style="color: #999; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">
+              View all messages in admin panel
+            </p>
+          </div>
+        `
+      })
+    } catch (emailError) {
+      console.error('Email error:', emailError)
+      // Don't fail the request if email fails - message is still saved
+    }
+
+    return NextResponse.json(
+      { success: true, message: 'Message sent successfully' },
+      { status: 200 }
+    )
+  } catch (error) {
+    console.error('Server error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
